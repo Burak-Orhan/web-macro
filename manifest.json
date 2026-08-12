@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Web Macro Asistanı",
+  "version": "1.0.0",
+  "description": "İstenilen hedeflere otomatik mesaj gönderen mini makro botu.",
+  "action": {
+    "default_popup": "index.html"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.js"]
+    }
+  ]
+}
