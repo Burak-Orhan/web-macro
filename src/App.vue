@@ -1,66 +1,88 @@
 <template>
   <div class="relative w-96 bg-slate-50 text-slate-800 font-sans shadow-2xl flex flex-col h-[540px] overflow-hidden">
     
+    <!-- Gizli Dosya Yükleme Input'u (Import İçin) -->
     <input type="file" ref="fileInputRef" accept=".json" @change="importScenarios" class="hidden" />
 
-    <div class="bg-[#020617] text-white p-2 flex items-center justify-between shadow-md z-20 shrink-0">
+    <!-- ================= ÜST BİLGİ (HEADER) ================= -->
+    <div class="bg-[#020617] text-white p-3.5 flex items-center justify-between shadow-md z-20 shrink-0">
       <div class="flex items-center gap-2.5">
         <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
         <h1 class="text-base font-bold tracking-wide">Web Otomasyon Aracı</h1>
       </div>
+      <div v-if="isRunning" class="flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider animate-pulse">
+        <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full shrink-0"></span> Çalışıyor
+      </div>
     </div>
     
+    <!-- ================= ANA EKRAN (DASHBOARD) ================= -->
     <div v-if="currentView === 'home'" class="p-3.5 flex-1 flex flex-col space-y-3.5 overflow-y-auto custom-scrollbar relative z-10">
       
-      <div class="grid grid-cols-2 gap-3 shrink-0">
-        <div class="bg-white border border-slate-200 p-2.5 rounded-xl flex flex-col items-start justify-center shadow-sm relative overflow-hidden">
-          <div v-if="isRunning" class="absolute inset-0 bg-emerald-50 opacity-50 animate-pulse"></div>
-          <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-1 relative z-10">Sistem Durumu</span>
-          <span :class="isRunning ? 'text-emerald-600' : 'text-slate-600'" class="text-[13px] font-extrabold flex items-center gap-1.5 relative z-10">
-            <span v-if="isRunning" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-            <span v-else class="w-2 h-2 rounded-full bg-slate-300 shrink-0"></span>
-            {{ isRunning ? 'Aktif Döngü' : 'Beklemede' }}
-          </span>
-        </div>
+      <!-- 1. DURUM & MODÜLLER (Bütünleşik Yeni Tasarım) -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col shrink-0">
         
-        <div class="bg-indigo-50/50 border border-indigo-100 p-2.5 rounded-xl flex flex-col relative shadow-sm">
-          <div class="flex items-center justify-between w-full mb-0.5">
-            <span class="text-[9px] text-indigo-500 font-bold uppercase tracking-wider">Gerçekleşen İşlem</span>
-            <button @click="resetCounter" :disabled="totalActionsCount === 0" class="text-indigo-400 hover:text-indigo-600 disabled:opacity-30 transition-colors shrink-0 p-0.5" title="Sayacı Sıfırla">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.213 6H16"></path></svg>
+        <!-- İstatistik: Gerçekleşen İşlem -->
+        <div class="px-3 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between rounded-t-xl">
+          <div class="flex items-center gap-2.5">
+            <div class="relative flex items-center justify-center w-7 h-7 bg-indigo-100 text-indigo-600 rounded-lg shadow-inner shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+              <!-- Çalışırken yanan minik radar noktası -->
+              <span v-if="isRunning" class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full animate-pulse"></span>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Gerçekleşen İşlem</span>
+              <div class="flex items-baseline gap-1">
+                <span class="text-sm font-black text-[#020617] leading-none">{{ totalActionsCount }}</span>
+                <span class="text-[9px] font-semibold text-slate-400">Döngü</span>
+              </div>
+            </div>
+          </div>
+          <button @click="resetCounter" :disabled="totalActionsCount === 0" class="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all disabled:opacity-40 text-[9px] font-bold shadow-sm shrink-0">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.213 6H16"></path></svg>
+            Sıfırla
+          </button>
+        </div>
+
+        <!-- Güvenlik Modülleri -->
+        <div class="p-2.5 flex items-center gap-2 bg-white" :class="hotkeys.enabled ? '' : 'rounded-b-xl'">
+          
+          <!-- Anti-Ban -->
+          <div class="flex-1 flex items-center justify-between p-2 rounded-lg border transition-colors" :class="antiBanEnabled ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'">
+            <div class="flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" :class="antiBanEnabled ? 'text-emerald-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+              <span class="text-[10px] font-bold" :class="antiBanEnabled ? 'text-emerald-700' : 'text-slate-500'">Anti-Ban</span>
+            </div>
+            <button @click="toggleAntiBan" :disabled="isRunning" :class="antiBanEnabled ? 'bg-emerald-500' : 'bg-slate-200'" class="relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50">
+              <span :class="antiBanEnabled ? 'translate-x-3' : 'translate-x-0'" class="pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition duration-200 ease-in-out"></span>
             </button>
           </div>
-          <span class="text-2xl font-black text-[#020617] leading-none">{{ totalActionsCount }}</span>
-        </div>
-      </div>
 
-      <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-col gap-3 shadow-sm shrink-0">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <div class="w-6 h-6 rounded flex items-center justify-center shrink-0 transition-colors" :class="hotkeys.enabled ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"></path></svg>
+          <!-- Kısayollar -->
+          <div class="flex-1 flex items-center justify-between p-2 rounded-lg border transition-colors" :class="hotkeys.enabled ? 'bg-indigo-50/50 border-indigo-100' : 'bg-slate-50 border-slate-100'">
+            <div class="flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" :class="hotkeys.enabled ? 'text-indigo-500' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"></path></svg>
+              <span class="text-[10px] font-bold" :class="hotkeys.enabled ? 'text-indigo-700' : 'text-slate-500'">Kısayol</span>
             </div>
-            <span class="text-[11px] font-bold tracking-wide transition-colors" :class="hotkeys.enabled ? 'text-[#020617]' : 'text-slate-400'">Klavye Kısayolları</span>
+            <button @click="toggleHotkeys" :disabled="isRunning" :class="hotkeys.enabled ? 'bg-indigo-500' : 'bg-slate-200'" class="relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50">
+              <span :class="hotkeys.enabled ? 'translate-x-3' : 'translate-x-0'" class="pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition duration-200 ease-in-out"></span>
+            </button>
           </div>
-          
-          <button @click="toggleHotkeys" :disabled="isRunning" :class="hotkeys.enabled ? 'bg-indigo-500' : 'bg-slate-200'" class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50">
-            <span :class="hotkeys.enabled ? 'translate-x-4' : 'translate-x-0'" class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition duration-200 ease-in-out"></span>
-          </button>
         </div>
         
-        <div class="flex gap-2 transition-opacity duration-200" :class="!hotkeys.enabled ? 'opacity-40 pointer-events-none' : 'opacity-100'">
-          <button @click="startRecordingHotkey('start')" :class="recordingType === 'start' ? 'ring-2 ring-emerald-500 bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300'" class="flex-1 border p-2 rounded-lg transition-all shadow-sm flex flex-col items-start gap-0.5 overflow-hidden">
-            <span class="text-[9px] uppercase tracking-wider font-bold" :class="recordingType === 'start' ? 'text-emerald-600' : 'text-slate-400'">Başlat</span>
-            <span class="text-[11px] font-black w-full text-left truncate" :class="recordingType === 'start' ? 'text-emerald-700' : 'text-[#020617]'">{{ recordingType === 'start' ? 'Dinleniyor...' : hotkeys.start.display }}</span>
+        <!-- Kısayol Ayarları (Genişler) -->
+        <div v-if="hotkeys.enabled" class="px-2.5 pb-2.5 pt-0 flex gap-2 animate-in slide-in-from-top-1 fade-in duration-200">
+          <button @click="startRecordingHotkey('start')" :class="recordingType === 'start' ? 'ring-1 ring-emerald-500 bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'" class="flex-1 border p-1.5 rounded-md transition-all shadow-sm flex items-center justify-between overflow-hidden">
+            <span class="text-[9px] uppercase tracking-wider font-bold shrink-0 mr-2" :class="recordingType === 'start' ? 'text-emerald-600' : 'text-slate-400'">Başlat</span>
+            <span class="text-[10px] font-black truncate" :class="recordingType === 'start' ? 'text-emerald-700' : 'text-[#020617]'">{{ recordingType === 'start' ? '...' : hotkeys.start.display }}</span>
           </button>
-          
-          <button @click="startRecordingHotkey('stop')" :class="recordingType === 'stop' ? 'ring-2 ring-rose-500 bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300'" class="flex-1 border p-2 rounded-lg transition-all shadow-sm flex flex-col items-start gap-0.5 overflow-hidden">
-            <span class="text-[9px] uppercase tracking-wider font-bold" :class="recordingType === 'stop' ? 'text-rose-600' : 'text-slate-400'">Durdur</span>
-            <span class="text-[11px] font-black w-full text-left truncate" :class="recordingType === 'stop' ? 'text-rose-700' : 'text-[#020617]'">{{ recordingType === 'stop' ? 'Dinleniyor...' : hotkeys.stop.display }}</span>
+          <button @click="startRecordingHotkey('stop')" :class="recordingType === 'stop' ? 'ring-1 ring-rose-500 bg-rose-50 border-rose-200' : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'" class="flex-1 border p-1.5 rounded-md transition-all shadow-sm flex items-center justify-between overflow-hidden">
+            <span class="text-[9px] uppercase tracking-wider font-bold shrink-0 mr-2" :class="recordingType === 'stop' ? 'text-rose-600' : 'text-slate-400'">Durdur</span>
+            <span class="text-[10px] font-black truncate" :class="recordingType === 'stop' ? 'text-rose-700' : 'text-[#020617]'">{{ recordingType === 'stop' ? '...' : hotkeys.stop.display }}</span>
           </button>
         </div>
       </div>
 
+      <!-- 2. BÜTÜNLEŞİK KONFİGÜRASYON KARTI -->
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col shrink-0">
         
         <div class="p-3 border-b border-slate-100 bg-slate-50/50">
@@ -142,6 +164,7 @@
       </button>
     </div>
 
+    <!-- ================= PAKET OLUŞTURMA / DÜZENLEME EKRANI ================= -->
     <div v-else-if="currentView === 'form'" class="p-4 flex-1 flex flex-col bg-white overflow-hidden">
       
       <div class="flex items-center justify-between mb-3 shrink-0">
@@ -220,6 +243,7 @@
       </div>
     </div>
 
+    <!-- ================= SENARYO SEÇİM MODALI (COMMAND PALETTE) ================= -->
     <div v-if="showScenarioModal" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-start justify-center pt-16 px-4 animate-in fade-in duration-150">
       <div class="bg-white w-full rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[400px] border border-slate-200/50 transform transition-all">
         
@@ -271,6 +295,7 @@
       </div>
     </div>
 
+    <!-- ================= SİSTEM MESAJI MODALI (HATA / BAŞARI UYARILARI) ================= -->
     <div v-if="sysMessage.show" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-md px-6">
       <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm border border-slate-100 transform transition-all animate-in fade-in zoom-in-95 duration-150 flex flex-col items-center">
         
@@ -293,6 +318,7 @@
       </div>
     </div>
 
+    <!-- DİĞER ONAY MODALLARI (İptal, Silme, Güncelleme) -->
     <div v-if="showCancelModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md px-6">
       <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm border border-slate-100 transform transition-all animate-in fade-in zoom-in-95 duration-150">
         <div class="w-14 h-14 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-4 shrink-0">
@@ -347,7 +373,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
-// YENİ: Sistem Mesajı Modalı State
 const sysMessage = ref({ show: false, type: 'success', title: '', message: '' })
 const showSystemMessage = (type, title, message) => { sysMessage.value = { show: true, type, title, message } }
 
@@ -369,6 +394,8 @@ const targetSelector = ref('')
 const selectedPackageId = ref('none')
 const isRunning = ref(false)
 const totalActionsCount = ref(0)
+
+const antiBanEnabled = ref(false)
 
 const hotkeys = ref({ 
   enabled: false, 
@@ -413,7 +440,7 @@ const storageListener = (changes, namespace) => {
 
 onMounted(() => {
   if (chrome?.storage) {
-    chrome.storage.local.get(['savedPackages', 'savedSelector', 'selectedPackageId', 'isRunning', 'totalActionsCount', 'hotkeys'], (result) => {
+    chrome.storage.local.get(['savedPackages', 'savedSelector', 'selectedPackageId', 'isRunning', 'totalActionsCount', 'hotkeys', 'antiBanEnabled'], (result) => {
       if (result.savedPackages && Array.isArray(result.savedPackages) && result.savedPackages.length > 0) {
         macroPackages.value = result.savedPackages
         if (result.selectedPackageId) selectedPackageId.value = result.selectedPackageId.toString()
@@ -430,6 +457,10 @@ onMounted(() => {
       if (result.hotkeys && result.hotkeys.start && result.hotkeys.stop) {
         hotkeys.value = result.hotkeys;
       }
+
+      if (result.antiBanEnabled !== undefined) {
+        antiBanEnabled.value = result.antiBanEnabled;
+      }
     })
     
     chrome.storage.onChanged.addListener(storageListener);
@@ -443,9 +474,6 @@ onUnmounted(() => {
   window.removeEventListener('keydown', captureHotkey, { capture: true })
 })
 
-// ==========================================
-// EXPORT & IMPORT (TÜM ALERTLER MODALA ÇEVRİLDİ)
-// ==========================================
 const exportScenarios = () => {
   if (!isRealPackageSelected.value || !selectedPackageData.value) {
     return showSystemMessage('warning', 'Eksik Seçim', 'Dışa aktarılacak bir senaryo seçilmemiş.');
@@ -523,6 +551,13 @@ const importScenarios = (e) => {
 const resetCounter = () => {
   totalActionsCount.value = 0;
   if (chrome?.storage) chrome.storage.local.set({ totalActionsCount: 0 });
+}
+
+const toggleAntiBan = () => {
+  antiBanEnabled.value = !antiBanEnabled.value;
+  if (chrome?.storage) {
+    chrome.storage.local.set({ antiBanEnabled: antiBanEnabled.value });
+  }
 }
 
 const toggleHotkeys = () => {
@@ -738,7 +773,8 @@ const toggleMacro = async () => {
       config: { 
         selector: targetSelector.value, 
         actions: actionsForMacro,
-        hotkey: hotkeys.value 
+        hotkey: hotkeys.value,
+        antiBan: antiBanEnabled.value 
       } 
     })
   } else {

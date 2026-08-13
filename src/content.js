@@ -1,16 +1,16 @@
 let inspecting = false;
 let isMacroRunning = false;
 
-let activeIntervals = [];
+// Sabit interval yerine, dinamik timeout'lar kullanıyoruz (Rastgelelik için)
+let activeTimeouts = []; 
 let taskQueue = [];
 let isProcessingQueue = false;
 
-// Kısayolları hafızada tutacağımız değişken
 let globalHotkeys = { enabled: false, start: null, stop: null };
+let isAntiBanActive = false; // YENİ: Rastgelelik durumu
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Hafızadaki Kısayolları Canlı Dinleme
 chrome.storage.local.get(['hotkeys'], (res) => {
     if (res.hotkeys) globalHotkeys = res.hotkeys;
 });
@@ -51,6 +51,8 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     }
 
     if (request.action === 'START_PACKAGE_MACRO') {
+        // YENİ: Anti-Ban bilgisini arayüzden al
+        isAntiBanActive = request.config.antiBan || false;
         startMacroLogic(request.config.selector, request.config.actions);
     }
 
@@ -59,13 +61,8 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     }
 });
 
-// ============================================================
-// GLOBAL KISAYOL YAKALAYICI (Arayüz kapalıyken bile çalışır)
-// ============================================================
 document.addEventListener('keydown', (e) => {
     if (globalHotkeys && globalHotkeys.enabled) {
-        
-        // Durdurma Tuşu Kontrolü
         if (isMacroRunning && matchHotkey(e, globalHotkeys.stop)) {
             e.preventDefault();
             stopMacroLogic();
@@ -73,7 +70,6 @@ document.addEventListener('keydown', (e) => {
             return;
         }
         
-        // Başlatma Tuşu Kontrolü
         if (!isMacroRunning && matchHotkey(e, globalHotkeys.start)) {
             e.preventDefault();
             startMacroFromStorage();
@@ -81,7 +77,6 @@ document.addEventListener('keydown', (e) => {
     }
 }, true);
 
-// Tuş Eşleştirme Motoru
 function matchHotkey(e, config) {
     if (!config || !config.key) return false;
     const mods = config.modifiers || { ctrl: false, shift: false, alt: false, meta: false };
@@ -94,9 +89,8 @@ function matchHotkey(e, config) {
     return e.key.toLowerCase() === config.key.toLowerCase();
 }
 
-// Hafızadan Veri Çekip Başlatma Fonksiyonu
 function startMacroFromStorage() {
-    chrome.storage.local.get(['savedPackages', 'selectedPackageId', 'savedSelector'], (res) => {
+    chrome.storage.local.get(['savedPackages', 'selectedPackageId', 'savedSelector', 'antiBanEnabled'], (res) => {
         if (!res.selectedPackageId || res.selectedPackageId === 'none' || !res.savedSelector) {
             showErrorToast("🚨 Başlatılamadı: Hedef veya Senaryo seçilmemiş!");
             return;
@@ -117,34 +111,62 @@ function startMacroFromStorage() {
             return;
         }
 
+        isAntiBanActive = res.antiBanEnabled || false;
         chrome.storage.local.set({ isRunning: true });
         showPremiumToast(`🚀 Başlatıldı! (${globalHotkeys.start.display})`);
         startMacroLogic(res.savedSelector, actionsForMacro);
     });
 }
 
+// ============================================================
+// YENİ: İNSANSI RASTGELELİK (ANTI-BAN) HESAPLAYICISI
+// ============================================================
+function getRandomizedDelay(baseDelay) {
+    if (!isAntiBanActive) return baseDelay;
+    
+    // %15 artı veya eksi rastgele sapma uygular
+    const variance = baseDelay * 0.15;
+    const randomOffset = (Math.random() * variance * 2) - variance;
+    return Math.max(100, Math.floor(baseDelay + randomOffset)); // Asla 100ms altına düşmez
+}
+
+function scheduleNextAction(action, baseDelayMs) {
+    if (!isMacroRunning) return;
+    
+    const actualDelay = getRandomizedDelay(baseDelayMs);
+    
+    let timeoutId = setTimeout(() => {
+        if (!isMacroRunning) return;
+        
+        // İşlemi kuyruğa at
+        taskQueue.push({ selector: action.selector, text: action.text, isClick: action.isClick });
+        processQueue(); 
+        
+        // Bir sonraki turu zamanla (Sonsuz döngü)
+        scheduleNextAction(action, baseDelayMs);
+    }, actualDelay);
+
+    activeTimeouts.push(timeoutId);
+}
+
 function startMacroLogic(selector, actions) {
     isMacroRunning = false; 
-    activeIntervals.forEach(clearInterval);
-    activeIntervals = [];
+    activeTimeouts.forEach(clearTimeout);
+    activeTimeouts = [];
     taskQueue = [];
     
     setTimeout(() => {
         isMacroRunning = true;
-        console.log("🚀 Paket Döngüsü Başladı. Hedef:", selector);
+        console.log(`🚀 ${isAntiBanActive ? 'Anti-Ban Korumalı ' : ''}Paket Döngüsü Başladı. Hedef:`, selector);
 
         actions.forEach(action => {
             let delayMs = parseInt(action.delay) || 2000;
+            
+            // İlk işlemi anında kuyruğa at
             taskQueue.push({ selector, text: action.text, isClick: action.isClick });
-
-            let intervalId = setInterval(() => {
-                if (isMacroRunning) {
-                    taskQueue.push({ selector, text: action.text, isClick: action.isClick });
-                    processQueue(); 
-                }
-            }, delayMs);
-
-            activeIntervals.push(intervalId);
+            
+            // Sonrakiler için dinamik zamanlayıcıyı başlat
+            scheduleNextAction({ selector, text: action.text, isClick: action.isClick }, delayMs);
         });
 
         processQueue();
@@ -153,8 +175,8 @@ function startMacroLogic(selector, actions) {
 
 function stopMacroLogic() {
     isMacroRunning = false;
-    activeIntervals.forEach(clearInterval);
-    activeIntervals = [];
+    activeTimeouts.forEach(clearTimeout);
+    activeTimeouts = [];
     taskQueue = [];
     chrome.storage.local.set({ isRunning: false });
     console.log("🛑 Makro durduruldu.");
@@ -169,16 +191,15 @@ async function processQueue() {
         await simulateHumanInteraction(task.selector, task.text, task.isClick);
 
         if (taskQueue.length > 0) {
-            await sleep(1200);
+            // İki ardışık işlem arasındaki standart 1.2 sn'lik koruma boşluğu
+            let waitTime = getRandomizedDelay(1200); 
+            await sleep(waitTime);
         }
     }
     
     isProcessingQueue = false;
 }
 
-// ============================================================
-// TOAST BİLDİRİM MOTORLARI
-// ============================================================
 function showPremiumToast(message) {
     const oldToast = document.getElementById('macro-premium-toast');
     if (oldToast) oldToast.remove();
@@ -203,9 +224,6 @@ function showErrorToast(message) {
     setTimeout(() => { toast.style.transform = 'translateX(150%)'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 3500);
 }
 
-// ============================================================
-// İNSAN SİMÜLASYONU
-// ============================================================
 async function simulateHumanInteraction(selector, messageText, isClickAction) {
     let targetElement = document.querySelector(selector);
     if (!targetElement) return console.error("Hata: Hedef bulunamadı!");
