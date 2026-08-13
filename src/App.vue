@@ -1,13 +1,12 @@
 <template>
   <div class="relative w-96 bg-slate-50 text-slate-800 font-sans shadow-2xl flex flex-col h-[540px] overflow-hidden">
     
-    <div class="bg-[#020617] text-white p-3.5 flex items-center justify-between shadow-md z-20 shrink-0">
+    <input type="file" ref="fileInputRef" accept=".json" @change="importScenarios" class="hidden" />
+
+    <div class="bg-[#020617] text-white p-2 flex items-center justify-between shadow-md z-20 shrink-0">
       <div class="flex items-center gap-2.5">
         <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
         <h1 class="text-base font-bold tracking-wide">Web Otomasyon Aracı</h1>
-      </div>
-      <div v-if="isRunning" class="flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider animate-pulse">
-        <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full shrink-0"></span> Çalışıyor
       </div>
     </div>
     
@@ -116,6 +115,21 @@
             <button @click="showScenarioModal = true" class="text-[11px] bg-white border border-slate-200 text-[#020617] px-3 py-1.5 rounded-lg font-bold hover:bg-slate-100 transition-all shadow-sm">
               Senaryo Seç veya Yarat
             </button>
+          </div>
+
+          <div class="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[10px] font-medium text-slate-400">
+            <span class="truncate">Toplam <strong class="text-slate-600">{{ macroPackages.length }}</strong> senaryo</span>
+            <div class="flex items-center gap-2 shrink-0">
+              <button @click="triggerFileInput" :disabled="isRunning" class="hover:text-indigo-600 transition-colors flex items-center gap-1 disabled:opacity-50" title="JSON'dan İçe Aktar">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                İçe Aktar
+              </button>
+              <span class="text-slate-200">|</span>
+              <button @click="exportScenarios" :disabled="!isRealPackageSelected" class="hover:text-indigo-600 transition-colors flex items-center gap-1 disabled:opacity-50" title="Seçili Senaryoyu Dışa Aktar">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Dışa Aktar
+              </button>
+            </div>
           </div>
           
         </div>
@@ -243,12 +257,39 @@
           </div>
         </div>
 
-        <div class="p-2 border-t border-slate-100 bg-slate-50/80 shrink-0">
-          <button @click="selectScenarioItem('trigger_create')" class="w-full flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-[#020617] hover:bg-slate-100 transition-colors shadow-sm">
-            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
-            Yeni Senaryo Oluştur
+        <div class="p-2 border-t border-slate-100 bg-slate-50/80 shrink-0 flex items-center gap-2">
+          <button @click="triggerFileInput" class="flex-1 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors shadow-sm flex items-center justify-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+            İçe Aktar
+          </button>
+          
+          <button @click="selectScenarioItem('trigger_create')" class="flex-[1.5] py-2 bg-[#020617] text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm flex items-center justify-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+            Yeni Oluştur
           </button>
         </div>
+      </div>
+    </div>
+
+    <div v-if="sysMessage.show" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-md px-6">
+      <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm border border-slate-100 transform transition-all animate-in fade-in zoom-in-95 duration-150 flex flex-col items-center">
+        
+        <div v-if="sysMessage.type === 'success'" class="w-14 h-14 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mb-4 shrink-0">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+        </div>
+        <div v-else-if="sysMessage.type === 'error'" class="w-14 h-14 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mb-4 shrink-0">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </div>
+        <div v-else class="w-14 h-14 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mb-4 shrink-0">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        </div>
+
+        <h3 class="text-base font-extrabold text-[#020617] mb-2 text-center">{{ sysMessage.title }}</h3>
+        <p class="text-xs text-slate-500 mb-6 text-center leading-relaxed">{{ sysMessage.message }}</p>
+        
+        <button @click="sysMessage.show = false" class="w-full bg-slate-100 text-slate-700 py-2.5 rounded-lg font-bold text-xs hover:bg-slate-200 transition-all shadow-sm">
+          Tamam
+        </button>
       </div>
     </div>
 
@@ -306,6 +347,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
+// YENİ: Sistem Mesajı Modalı State
+const sysMessage = ref({ show: false, type: 'success', title: '', message: '' })
+const showSystemMessage = (type, title, message) => { sysMessage.value = { show: true, type, title, message } }
+
 const currentView = ref('home')
 const formMode = ref('create')
 const editingPackageId = ref(null)
@@ -317,6 +362,7 @@ const showScenarioModal = ref(false)
 
 const searchQuery = ref('')
 const searchInputRef = ref(null)
+const fileInputRef = ref(null)
 
 const macroPackages = ref([])
 const targetSelector = ref('')
@@ -397,6 +443,83 @@ onUnmounted(() => {
   window.removeEventListener('keydown', captureHotkey, { capture: true })
 })
 
+// ==========================================
+// EXPORT & IMPORT (TÜM ALERTLER MODALA ÇEVRİLDİ)
+// ==========================================
+const exportScenarios = () => {
+  if (!isRealPackageSelected.value || !selectedPackageData.value) {
+    return showSystemMessage('warning', 'Eksik Seçim', 'Dışa aktarılacak bir senaryo seçilmemiş.');
+  }
+  
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify([selectedPackageData.value], null, 2));
+  const safeName = selectedPackageData.value.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `otomasyon_${safeName}_${Date.now()}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+}
+
+const triggerFileInput = () => {
+  if (fileInputRef.value) fileInputRef.value.click();
+}
+
+const importScenarios = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const importedData = JSON.parse(event.target.result);
+      let packagesToAdd = [];
+
+      if (Array.isArray(importedData)) {
+        packagesToAdd = importedData;
+      } else if (importedData && importedData.name && importedData.actions) {
+        packagesToAdd = [importedData];
+      } else {
+        return showSystemMessage('error', 'İçe Aktarma Başarısız', 'Geçersiz veya bozuk senaryo dosyası seçtiniz.');
+      }
+
+      let count = 0;
+      packagesToAdd.forEach(pkg => {
+        if (pkg.name && Array.isArray(pkg.actions)) {
+          const newPkg = {
+            id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
+            name: pkg.name,
+            actions: pkg.actions.map(a => ({
+              text: a.text || '',
+              delay: a.delay || 2000,
+              timeUnit: a.timeUnit || 'ms',
+              isClick: !!a.isClick,
+              isActive: a.isActive !== false
+            }))
+          };
+          macroPackages.value.push(newPkg);
+          count++;
+        }
+      });
+
+      if (count > 0) {
+        saveToChromeStorage();
+        if (selectedPackageId.value === 'none' && macroPackages.value.length > 0) {
+          selectedPackageId.value = macroPackages.value[macroPackages.value.length - 1].id;
+        }
+        showSystemMessage('success', 'İşlem Başarılı', `${count} adet senaryo başarıyla içe aktarıldı!`);
+      } else {
+        showSystemMessage('warning', 'Senaryo Bulunamadı', 'Dosya içinde geçerli bir senaryo yapısı bulunamadı.');
+      }
+    } catch (err) {
+      showSystemMessage('error', 'Okuma Hatası', 'JSON dosyası okunurken sistemsel bir hata oluştu.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = ''; 
+}
+
 const resetCounter = () => {
   totalActionsCount.value = 0;
   if (chrome?.storage) chrome.storage.local.set({ totalActionsCount: 0 });
@@ -416,13 +539,7 @@ const captureHotkey = (e) => {
   e.preventDefault();
   e.stopPropagation();
   
-  const modifiers = {
-    ctrl: e.ctrlKey,
-    shift: e.shiftKey,
-    alt: e.altKey,
-    meta: e.metaKey
-  };
-
+  const modifiers = { ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey };
   const invalidKeys = ['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'Tab'];
   if (invalidKeys.includes(e.key)) return; 
 
@@ -456,16 +573,11 @@ const captureHotkey = (e) => {
 }
 
 const saveGlobalConfig = () => {
-  if (chrome?.storage) {
-    chrome.storage.local.set({ hotkeys: JSON.parse(JSON.stringify(hotkeys.value)) });
-  }
+  if (chrome?.storage) chrome.storage.local.set({ hotkeys: JSON.parse(JSON.stringify(hotkeys.value)) });
 }
 
 const selectScenarioItem = (id) => {
-  if (id !== selectedPackageId.value && id !== 'trigger_create') {
-    resetCounter();
-  }
-
+  if (id !== selectedPackageId.value && id !== 'trigger_create') resetCounter();
   showScenarioModal.value = false;
   searchQuery.value = '';
 
@@ -504,20 +616,11 @@ const openForm = (pkgId = null) => {
   currentView.value = 'form'
 }
 
-const handleCancelClick = () => {
-  showCancelModal.value = true
-}
-
-const confirmCancel = () => {
-  showCancelModal.value = false
-  currentView.value = 'home'
-}
+const handleCancelClick = () => { showCancelModal.value = true }
+const confirmCancel = () => { showCancelModal.value = false; currentView.value = 'home' }
 
 const addActionRow = () => packageForm.value.actions.push({ text: '', delay: 2000, timeUnit: 'ms', isClick: false, isActive: true })
-
-const removeActionRow = (index) => {
-  if (packageForm.value.actions.length > 1) packageForm.value.actions.splice(index, 1)
-}
+const removeActionRow = (index) => { if (packageForm.value.actions.length > 1) packageForm.value.actions.splice(index, 1) }
 
 const moveActionUp = (index) => {
   if (index > 0) {
@@ -536,9 +639,10 @@ const moveActionDown = (index) => {
 }
 
 const handleSaveButtonClick = () => {
-  if (!packageForm.value.name.trim()) return alert("Lütfen senaryoya bir isim verin.")
+  if (!packageForm.value.name.trim()) return showSystemMessage('warning', 'Eksik Bilgi', 'Lütfen senaryoya bir isim verin.');
+  
   const validActions = packageForm.value.actions.filter(a => a.text.trim() !== '' || a.isClick)
-  if (validActions.length === 0) return alert("En az bir işlem tanımlamalısınız.")
+  if (validActions.length === 0) return showSystemMessage('warning', 'Eksik Bilgi', 'Senaryo kaydedilemedi. En az bir işlem tanımlamalısınız.');
 
   if (formMode.value === 'edit') {
     showUpdateModal.value = true
@@ -602,8 +706,13 @@ const startInspection = async () => {
 }
 
 const toggleMacro = async () => {
-  if (!isRealPackageSelected.value || !targetSelector.value) return alert("Lütfen hedef element ve otomasyon senaryosu seçin.")
-  if (!selectedPackageData.value) return alert("Hata: Senaryo verisi okunamadı!")
+  if (!isRealPackageSelected.value || !targetSelector.value) {
+    return showSystemMessage('warning', 'Eksik Yapılandırma', 'Sistemi başlatmak için lütfen önce bir Hedef Element ve Otomasyon Senaryosu seçin.');
+  }
+  
+  if (!selectedPackageData.value) {
+    return showSystemMessage('error', 'Okuma Hatası', 'Senaryo verisi okunamadı. Lütfen senaryoyu tekrar seçin.');
+  }
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab) return
@@ -618,7 +727,7 @@ const toggleMacro = async () => {
       }))
 
     if (actionsForMacro.length === 0) {
-       return alert("Bu senaryodaki tüm eylemler pasif durumda. Lütfen en az bir eylemi aktif yapın.");
+       return showSystemMessage('warning', 'Pasif Senaryo', 'Bu senaryodaki tüm eylemler pasif durumda. İşlem yapabilmek için en az bir eylemi aktif hale getirin.');
     }
 
     isRunning.value = true
