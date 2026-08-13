@@ -1,15 +1,26 @@
 let inspecting = false;
 let isMacroRunning = false;
 
-// Sabit interval yerine, dinamik timeout'lar kullanıyoruz (Rastgelelik için)
 let activeTimeouts = []; 
 let taskQueue = [];
 let isProcessingQueue = false;
 
 let globalHotkeys = { enabled: false, start: null, stop: null };
-let isAntiBanActive = false; // YENİ: Rastgelelik durumu
+let isAntiBanActive = false; 
+let currentLoopLimit = 0; 
+let sessionActionCount = 0; // YENİ: Anlık limit takibi için senkron hafıza
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+function addLog(message) {
+    const time = new Date().toLocaleTimeString('tr-TR', { hour12: false });
+    chrome.storage.local.get(['actionLogs'], (res) => {
+        let logs = res.actionLogs || [];
+        logs.unshift({ id: Date.now() + Math.random(), time, text: message });
+        if (logs.length > 50) logs.pop(); 
+        chrome.storage.local.set({ actionLogs: logs });
+    });
+}
 
 chrome.storage.local.get(['hotkeys'], (res) => {
     if (res.hotkeys) globalHotkeys = res.hotkeys;
@@ -51,12 +62,16 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     }
 
     if (request.action === 'START_PACKAGE_MACRO') {
-        // YENİ: Anti-Ban bilgisini arayüzden al
         isAntiBanActive = request.config.antiBan || false;
+        currentLoopLimit = parseInt(request.config.loopLimit) || 0; 
+        sessionActionCount = 0; // Her başlatıldığında session sıfırlanır
+        
+        addLog(`🚀 Sistem başlatıldı. (Limit: ${currentLoopLimit > 0 ? currentLoopLimit : 'Sonsuz'})`);
         startMacroLogic(request.config.selector, request.config.actions);
     }
 
     if (request.action === 'STOP_MACRO') {
+        addLog("🛑 Sistem manuel olarak durduruldu.");
         stopMacroLogic();
     }
 });
@@ -65,6 +80,7 @@ document.addEventListener('keydown', (e) => {
     if (globalHotkeys && globalHotkeys.enabled) {
         if (isMacroRunning && matchHotkey(e, globalHotkeys.stop)) {
             e.preventDefault();
+            addLog(`🚨 Acil Durdurma Tetiklendi! (${globalHotkeys.stop.display})`);
             stopMacroLogic();
             showErrorToast(`🚨 Otomasyon Durduruldu! (${globalHotkeys.stop.display})`);
             return;
@@ -90,7 +106,7 @@ function matchHotkey(e, config) {
 }
 
 function startMacroFromStorage() {
-    chrome.storage.local.get(['savedPackages', 'selectedPackageId', 'savedSelector', 'antiBanEnabled'], (res) => {
+    chrome.storage.local.get(['savedPackages', 'selectedPackageId', 'savedSelector', 'antiBanEnabled', 'loopLimit'], (res) => {
         if (!res.selectedPackageId || res.selectedPackageId === 'none' || !res.savedSelector) {
             showErrorToast("🚨 Başlatılamadı: Hedef veya Senaryo seçilmemiş!");
             return;
@@ -112,40 +128,33 @@ function startMacroFromStorage() {
         }
 
         isAntiBanActive = res.antiBanEnabled || false;
+        currentLoopLimit = parseInt(res.loopLimit) || 0;
+        sessionActionCount = 0; // Senkron sayacı sıfırla
+
         chrome.storage.local.set({ isRunning: true });
         showPremiumToast(`🚀 Başlatıldı! (${globalHotkeys.start.display})`);
+        
+        addLog(`🚀 Kısayol ile başlatıldı. (Limit: ${currentLoopLimit > 0 ? currentLoopLimit : 'Sonsuz'})`);
         startMacroLogic(res.savedSelector, actionsForMacro);
     });
 }
 
-// ============================================================
-// YENİ: İNSANSI RASTGELELİK (ANTI-BAN) HESAPLAYICISI
-// ============================================================
 function getRandomizedDelay(baseDelay) {
     if (!isAntiBanActive) return baseDelay;
-    
-    // %15 artı veya eksi rastgele sapma uygular
     const variance = baseDelay * 0.15;
     const randomOffset = (Math.random() * variance * 2) - variance;
-    return Math.max(100, Math.floor(baseDelay + randomOffset)); // Asla 100ms altına düşmez
+    return Math.max(100, Math.floor(baseDelay + randomOffset)); 
 }
 
 function scheduleNextAction(action, baseDelayMs) {
     if (!isMacroRunning) return;
-    
     const actualDelay = getRandomizedDelay(baseDelayMs);
-    
     let timeoutId = setTimeout(() => {
         if (!isMacroRunning) return;
-        
-        // İşlemi kuyruğa at
-        taskQueue.push({ selector: action.selector, text: action.text, isClick: action.isClick });
+        taskQueue.push({ selector: action.selector, text: action.text, isClick: action.isClick, stepIndex: action.stepIndex });
         processQueue(); 
-        
-        // Bir sonraki turu zamanla (Sonsuz döngü)
         scheduleNextAction(action, baseDelayMs);
     }, actualDelay);
-
     activeTimeouts.push(timeoutId);
 }
 
@@ -157,16 +166,14 @@ function startMacroLogic(selector, actions) {
     
     setTimeout(() => {
         isMacroRunning = true;
-        console.log(`🚀 ${isAntiBanActive ? 'Anti-Ban Korumalı ' : ''}Paket Döngüsü Başladı. Hedef:`, selector);
+        console.log(`🚀 Paket Döngüsü Başladı.`);
 
-        actions.forEach(action => {
+        actions.forEach((action, idx) => {
             let delayMs = parseInt(action.delay) || 2000;
+            let stepIndex = idx + 1; 
             
-            // İlk işlemi anında kuyruğa at
-            taskQueue.push({ selector, text: action.text, isClick: action.isClick });
-            
-            // Sonrakiler için dinamik zamanlayıcıyı başlat
-            scheduleNextAction({ selector, text: action.text, isClick: action.isClick }, delayMs);
+            taskQueue.push({ selector, text: action.text, isClick: action.isClick, stepIndex });
+            scheduleNextAction({ selector, text: action.text, isClick: action.isClick, stepIndex }, delayMs);
         });
 
         processQueue();
@@ -179,7 +186,6 @@ function stopMacroLogic() {
     activeTimeouts = [];
     taskQueue = [];
     chrome.storage.local.set({ isRunning: false });
-    console.log("🛑 Makro durduruldu.");
 }
 
 async function processQueue() {
@@ -188,10 +194,9 @@ async function processQueue() {
 
     while (taskQueue.length > 0 && isMacroRunning) {
         let task = taskQueue.shift();
-        await simulateHumanInteraction(task.selector, task.text, task.isClick);
+        await simulateHumanInteraction(task.selector, task.text, task.isClick, task.stepIndex);
 
-        if (taskQueue.length > 0) {
-            // İki ardışık işlem arasındaki standart 1.2 sn'lik koruma boşluğu
+        if (taskQueue.length > 0 && isMacroRunning) {
             let waitTime = getRandomizedDelay(1200); 
             await sleep(waitTime);
         }
@@ -224,16 +229,22 @@ function showErrorToast(message) {
     setTimeout(() => { toast.style.transform = 'translateX(150%)'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 3500);
 }
 
-async function simulateHumanInteraction(selector, messageText, isClickAction) {
+// ============================================================
+// İNSAN SİMÜLASYONU VE ANLIK LİMİT KONTROLÜ
+// ============================================================
+async function simulateHumanInteraction(selector, messageText, isClickAction, stepIndex) {
     let targetElement = document.querySelector(selector);
-    if (!targetElement) return console.error("Hata: Hedef bulunamadı!");
+    if (!targetElement) {
+        addLog(`HATA: #${stepIndex} için Hedef bulunamadı!`);
+        return console.error("Hata: Hedef bulunamadı!");
+    }
 
     const editableParent = targetElement.closest('[contenteditable="true"]');
     if (editableParent) targetElement = editableParent;
 
     if (isClickAction) {
-        console.log("🎯 Element tıklanıyor...");
         targetElement.click();
+        addLog(`#${stepIndex} uygulandı: [🖱️ Tıklama]`);
         await sleep(150); 
     }
 
@@ -263,9 +274,19 @@ async function simulateHumanInteraction(selector, messageText, isClickAction) {
         targetElement.dispatchEvent(new KeyboardEvent('keydown', enterOptions));
         targetElement.dispatchEvent(new KeyboardEvent('keypress', enterOptions));
         targetElement.dispatchEvent(new KeyboardEvent('keyup', enterOptions));
-        console.log("✉️ Gönderildi:", messageText);
+        
+        addLog(`#${stepIndex} uygulandı: [✍️ "${messageText}"]`);
     }
 
+    // 1. ANLIK LİMİT KONTROLÜ (Senkron hafıza yarışmalarını engeller)
+    sessionActionCount++;
+    if (currentLoopLimit > 0 && sessionActionCount >= currentLoopLimit) {
+        stopMacroLogic();
+        showPremiumToast(`✅ Döngü Limiti (${currentLoopLimit}) Tamamlandı!`);
+        addLog(`🎯 Görev Bitti: Belirlenen limite (${currentLoopLimit}) ulaşıldı.`);
+    }
+
+    // 2. ARAYÜZ (DASHBOARD) SAYAÇ GÜNCELLEMESİ (Asenkron)
     chrome.storage.local.get(['totalActionsCount'], (res) => {
         let currentCount = res.totalActionsCount || 0;
         chrome.storage.local.set({ totalActionsCount: currentCount + 1 });
